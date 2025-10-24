@@ -1078,7 +1078,7 @@
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
 
-            if (!ip || !port || !username ) {
+            if (!ip || !port || !username) {
                 showToast('warning', 'Input Tidak Lengkap', 'Mohon isi semua field yang diperlukan');
                 connectBtn.disabled = false;
                 connectingIndicator.classList.remove('visible');
@@ -1222,6 +1222,7 @@
         }
 
         // Load Stream
+        // Load Stream - IMPROVED VERSION
         function loadStream() {
             if (!cameraConnected) {
                 showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
@@ -1230,22 +1231,109 @@
 
             const videoContainer = document.querySelector('.video-container');
             const timestamp = new Date().getTime();
+            const streamUrl = `${API_BASE}/stream/mjpeg?t=${timestamp}`;
 
+            console.log('🎬 Loading stream from:', streamUrl);
+
+            // Show loading indicator
             videoContainer.innerHTML = `
-                <div class="connecting-overlay visible" id="stream-connecting">
-                    <div class="loader"></div>
-                    <p>Loading stream...</p>
-                </div>
-                <img src="${API_BASE}/stream/mjpeg?t=${timestamp}" 
-                     style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" 
-                     onload="handleStreamLoad()" 
-                     onerror="handleStreamError(this)">
-            `;
+        <div class="connecting-overlay visible" id="stream-connecting">
+            <div class="loader"></div>
+            <p>Memuat stream...</p>
+            <p style="font-size: 0.9em; margin-top: 10px; opacity: 0.7;">Mohon tunggu 5-10 detik</p>
+        </div>
+    `;
 
+            // Create img element
+            const img = document.createElement('img');
+            img.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+        display: none;
+    `;
+            img.src = streamUrl;
+
+            // Track loading
+            let loadTimeout;
+            let isLoaded = false;
+
+            // On load success
+            img.onload = function () {
+                console.log('✅ Stream loaded successfully!');
+                isLoaded = true;
+                clearTimeout(loadTimeout);
+
+                // Remove loading overlay
+                const overlay = document.getElementById('stream-connecting');
+                if (overlay) {
+                    overlay.remove();
+                }
+
+                // Show image
+                img.style.display = 'block';
+
+                streamActive = true;
+                document.getElementById('btn-stop-stream').disabled = false;
+                document.getElementById('btn-start-stream').disabled = true;
+
+                showToast('success', 'Stream Active', 'Video streaming berhasil dimulai');
+            };
+
+            // On error
+            img.onerror = function (e) {
+                console.error('❌ Stream load error:', e);
+                clearTimeout(loadTimeout);
+                handleStreamError();
+            };
+
+            // Timeout after 15 seconds
+            loadTimeout = setTimeout(() => {
+                if (!isLoaded) {
+                    console.error('⏱️ Stream load timeout');
+                    handleStreamError();
+                }
+            }, 15000);
+
+            // Add image to container
+            videoContainer.appendChild(img);
+
+            // Mark as attempting to stream
             streamActive = true;
             document.getElementById('btn-stop-stream').disabled = false;
+        }
 
-            showToast('info', 'Starting Stream', 'Memuat video stream...');
+        // Handle Stream Error - IMPROVED
+        function handleStreamError() {
+            streamActive = false;
+            const videoContainer = document.querySelector('.video-container');
+
+            videoContainer.innerHTML = `
+        <div class="video-placeholder" style="padding: 30px;">
+            <div class="icon">❌</div>
+            <h3>Gagal Memuat Stream</h3>
+            <p style="margin: 15px 0;">Kemungkinan penyebab:</p>
+            <ul style="text-align: left; max-width: 500px; margin: 0 auto; line-height: 1.8;">
+                <li><strong>FFmpeg belum terinstall</strong> - Jalankan: <code>ffmpeg -version</code></li>
+                <li><strong>RTSP URL tidak valid</strong> - Cek kredensial kamera</li>
+                <li><strong>Network timeout</strong> - Pastikan koneksi stabil</li>
+                <li><strong>Kamera tidak support RTSP</strong> - Test dengan VLC Player</li>
+                <li><strong>Port diblokir firewall</strong> - Buka port 554 (RTSP)</li>
+            </ul>
+            <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px; font-size: 0.9em;">
+                <strong>Debug:</strong> Buka console browser (F12) dan server terminal untuk melihat error detail
+            </div>
+        </div>
+    `;
+
+            document.getElementById('btn-stop-stream').disabled = true;
+            document.getElementById('btn-start-stream').disabled = false;
+
+            showToast('error', 'Stream Failed', 'Gagal memuat video. Periksa console untuk detail.');
         }
 
         // Handle Stream Load

@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const onvif = require('node-onvif');
-const ffmpeg = require('fluent-ffmpeg');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = 3000;
@@ -16,7 +16,7 @@ let cameraDevice = null;
 let cameraInfo = null;
 let onvifUsername = null;
 let onvifPassword = null;
-let currentStream = null;
+let ffmpegProcess = null;
 let streamClients = new Set();
 
 // Helper: Format Stream URI dengan kredensial
@@ -37,35 +37,31 @@ app.post('/api/connect', async (req, res) => {
     try {
         const { ip, port, username, password } = req.body;
 
-        // Validasi input
-        if (!ip || !port || !username ) {
+        if (!ip || !port || !username) {
             return res.status(400).json({
                 success: false,
-                error: 'Semua field harus diisi (IP, Port, Username, )'
+                error: 'Semua field harus diisi (IP, Port, Username)'
             });
         }
 
         onvifUsername = username;
-        onvifPassword = password;
+        onvifPassword = password || '';
 
         console.log(`🔌 Mencoba koneksi ke: ${ip}:${port}`);
 
-        // Buat instance ONVIF device
         cameraDevice = new onvif.OnvifDevice({
             xaddr: `http://${ip}:${port}/onvif/device_service`,
             user: username,
-            pass: password
+            pass: password || ''
         });
 
-        // Inisialisasi koneksi dengan timeout
         await Promise.race([
             cameraDevice.init(),
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Connection timeout (10s)')), 10000)
             )
         ]);
 
-        // Simpan info kamera
         cameraInfo = {
             manufacturer: cameraDevice.information?.Manufacturer || 'Unknown',
             model: cameraDevice.information?.Model || 'Unknown',
@@ -75,10 +71,7 @@ app.post('/api/connect', async (req, res) => {
             URI: cameraDevice.xaddr
         };
 
-        // Dapatkan profile kamera
         const profiles = cameraDevice.getProfileList();
-        
-        // Check PTZ capability
         const ptzSupported = profiles.some(p => p.ptz);
 
         console.log('✅ Koneksi berhasil!');
@@ -108,17 +101,17 @@ app.post('/api/connect', async (req, res) => {
 // ===== ENDPOINT: Disconnect Kamera =====
 app.post('/api/disconnect', (req, res) => {
     try {
-        if (currentStream) {
-            currentStream.kill('SIGKILL');
-            currentStream = null;
+        if (ffmpegProcess) {
+            ffmpegProcess.kill('SIGKILL');
+            ffmpegProcess = null;
         }
-        
+
         streamClients.clear();
         cameraDevice = null;
         cameraInfo = null;
-        
+
         console.log('🔌 Kamera disconnected');
-        
+
         res.json({
             success: true,
             message: 'Kamera berhasil diputus'
@@ -158,7 +151,6 @@ app.get('/api/camera/status', async (req, res) => {
             });
         }
 
-        // Coba dapatkan status PTZ
         let ptzStatus = null;
         try {
             ptzStatus = await cameraDevice.ptzGetStatus();
@@ -171,7 +163,7 @@ app.get('/api/camera/status', async (req, res) => {
             connected: true,
             info: cameraInfo,
             ptzStatus: ptzStatus,
-            streamActive: currentStream !== null,
+            streamActive: ffmpegProcess !== null,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -193,10 +185,8 @@ app.post('/api/ptz/move', async (req, res) => {
         }
 
         const { direction, speed = 0.5 } = req.body;
-
         let x = 0, y = 0, z = 0;
 
-        // Mapping direction ke velocity
         switch (direction.toLowerCase()) {
             case 'up': y = speed; break;
             case 'down': y = -speed; break;
@@ -213,7 +203,6 @@ app.post('/api/ptz/move', async (req, res) => {
                 });
         }
 
-        // Kirim perintah PTZ
         await cameraDevice.ptzMove({
             speed: { x, y, z },
             timeout: 1
@@ -248,7 +237,6 @@ app.post('/api/ptz/stop', async (req, res) => {
         }
 
         await cameraDevice.ptzStop();
-
         console.log('⏹️ PTZ Stopped');
 
         res.json({
@@ -351,7 +339,6 @@ app.post('/api/ptz/preset/goto', async (req, res) => {
         }
 
         await cameraDevice.ptzGotoPreset({ preset });
-
         console.log(`📍 Moved to Preset: ${preset}`);
 
         res.json({
@@ -389,7 +376,6 @@ app.post('/api/ptz/preset/set', async (req, res) => {
         }
 
         await cameraDevice.ptzSetPreset({ name });
-
         console.log(`💾 Preset saved: "${name}"`);
 
         res.json({
@@ -427,7 +413,6 @@ app.post('/api/ptz/preset/delete', async (req, res) => {
         }
 
         await cameraDevice.ptzRemovePreset({ preset });
-
         console.log(`🗑️ Preset deleted: ${preset}`);
 
         res.json({
@@ -473,7 +458,7 @@ app.get('/api/stream/url', async (req, res) => {
     }
 });
 
-// ===== ENDPOINT: MJPEG Stream =====
+// ===== ENDPOINT: MJPEG Stream (Using spawn for better control) =====
 app.get('/api/stream/mjpeg', async (req, res) => {
     if (!cameraDevice || !cameraDevice.current_profile) {
         return res.status(400).send('Kamera belum terhubung atau tidak ada profil aktif');
@@ -483,60 +468,95 @@ app.get('/api/stream/mjpeg', async (req, res) => {
         let streamUri = cameraDevice.current_profile.stream.rtsp;
         streamUri = formatStreamUri(streamUri, onvifUsername, onvifPassword);
 
-        console.log('📺 Starting MJPEG stream...');
+        console.log('📺 Starting MJPEG stream from:', streamUri);
 
         res.writeHead(200, {
-            'Content-Type': 'multipart/x-mixed-replace; boundary=--boundary',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Pragma': 'no-cache'
+            'Content-Type': 'multipart/x-mixed-replace; boundary=ffmpeg',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Connection': 'close'
         });
 
         streamClients.add(res);
 
-        // Convert RTSP to MJPEG using FFmpeg
-        const stream = ffmpeg(streamUri)
-            .inputOptions([
-                '-rtsp_transport', 'tcp',
-                '-analyzeduration', '1000000',
-                '-probesize', '1000000'
-            ])
-            .outputOptions([
-                '-f', 'mjpeg',
-                '-q:v', '5'
-            ])
-            .on('start', (cmd) => {
-                console.log('▶️ FFmpeg started:', cmd.substring(0, 100) + '...');
-            })
-            .on('stderr', (stderrLine) => {
-                console.log('FFmpeg stderr:', stderrLine);
-            })
-            .on('error', (err, stdout, stderr) => {
-                console.error('❌ FFmpeg Error:', err.message);
-                console.error('FFmpeg stdout:', stdout);
-                console.error('FFmpeg stderr:', stderr);
-                streamClients.delete(res);
-            })
-            .on('end', () => {
-                console.log('⏹️ FFmpeg stream ended');
-                streamClients.delete(res);
-            });
+        // Kill existing stream if any
+        if (ffmpegProcess && streamClients.size === 1) {
+            ffmpegProcess.kill('SIGKILL');
+            ffmpegProcess = null;
+        }
 
-        currentStream = stream;
-        stream.pipe(res, { end: true });
+        // FFmpeg command with spawn
+        const args = [
+            '-rtsp_transport', 'tcp',
+            '-i', streamUri,
+            '-f', 'mpjpeg',
+            '-q:v', '5',
+            '-vf', 'scale=1280:-2',
+            '-r', '15',
+            '-'
+        ];
 
-        req.on('close', () => {
-            console.log('🔌 Client disconnected from stream');
+        console.log('▶️ FFmpeg command:', 'ffmpeg', args.join(' '));
+
+        ffmpegProcess = spawn('ffmpeg', args);
+
+        // Handle stdout (video data)
+        ffmpegProcess.stdout.on('data', (data) => {
+            if (!res.destroyed) {
+                res.write(data);
+            }
+        });
+
+        // Handle stderr (logs)
+        ffmpegProcess.stderr.on('data', (data) => {
+            const msg = data.toString();
+            if (msg.includes('frame=')) {
+                // Frame info - don't spam console
+                process.stdout.write('.');
+            } else if (msg.includes('error') || msg.includes('Error')) {
+                console.error('FFmpeg error:', msg);
+            }
+        });
+
+        // Handle process errors
+        ffmpegProcess.on('error', (error) => {
+            console.error('❌ FFmpeg process error:', error.message);
             streamClients.delete(res);
-            if (streamClients.size === 0 && currentStream) {
-                currentStream.kill('SIGKILL');
-                currentStream = null;
+            if (!res.destroyed) {
+                res.end();
+            }
+        });
+
+        // Handle process exit
+        ffmpegProcess.on('close', (code) => {
+            console.log(`\n⏹️ FFmpeg exited with code ${code}`);
+            streamClients.delete(res);
+            if (!res.destroyed) {
+                res.end();
+            }
+            if (streamClients.size === 0) {
+                ffmpegProcess = null;
+            }
+        });
+
+        // Handle client disconnect
+        req.on('close', () => {
+            console.log('\n🔌 Client disconnected from stream');
+            streamClients.delete(res);
+            
+            if (streamClients.size === 0 && ffmpegProcess) {
+                console.log('⏹️ No more clients, stopping stream');
+                ffmpegProcess.kill('SIGKILL');
+                ffmpegProcess = null;
             }
         });
 
     } catch (error) {
         console.error('❌ Stream Error:', error.message);
-        res.status(500).send('Stream error: ' + error.message);
+        streamClients.delete(res);
+        if (!res.headersSent) {
+            res.status(500).send('Stream error: ' + error.message);
+        }
     }
 });
 
@@ -546,7 +566,7 @@ app.get('/api/health', (req, res) => {
         success: true,
         message: 'Server is running',
         connected: cameraDevice !== null,
-        streaming: currentStream !== null,
+        streaming: ffmpegProcess !== null,
         clients: streamClients.size,
         timestamp: new Date().toISOString()
     });
@@ -565,8 +585,8 @@ app.use((err, req, res, next) => {
 // Graceful Shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server...');
-    if (currentStream) {
-        currentStream.kill('SIGKILL');
+    if (ffmpegProcess) {
+        ffmpegProcess.kill('SIGKILL');
     }
     process.exit(0);
 });
