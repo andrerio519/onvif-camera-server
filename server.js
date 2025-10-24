@@ -494,7 +494,7 @@ app.get('/api/stream/mjpeg', async (req, res) => {
 
         streamClients.add(res);
 
-        // Convert RTSP to MJPEG menggunakan FFmpeg
+        // Convert RTSP to MJPEG using FFmpeg
         const stream = ffmpeg(streamUri)
             .inputOptions([
                 '-rtsp_transport', 'tcp',
@@ -503,14 +503,18 @@ app.get('/api/stream/mjpeg', async (req, res) => {
             ])
             .outputOptions([
                 '-f', 'mjpeg',
-                '-q:v', '5',
-                '-vf', 'scale=1280:-1'
+                '-q:v', '5'
             ])
             .on('start', (cmd) => {
                 console.log('▶️ FFmpeg started:', cmd.substring(0, 100) + '...');
             })
-            .on('error', (err) => {
+            .on('stderr', (stderrLine) => {
+                console.log('FFmpeg stderr:', stderrLine);
+            })
+            .on('error', (err, stdout, stderr) => {
                 console.error('❌ FFmpeg Error:', err.message);
+                console.error('FFmpeg stdout:', stdout);
+                console.error('FFmpeg stderr:', stderr);
                 streamClients.delete(res);
             })
             .on('end', () => {

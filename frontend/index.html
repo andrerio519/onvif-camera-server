@@ -988,14 +988,14 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Global variables
-            let cameraConnected = false;
-            let streamActive = false;
-            let currentSpeed = 0.5;
-            const API_BASE = 'http://localhost:3000/api';
+        // Global variables
+        let cameraConnected = false;
+        let streamActive = false;
+        let currentSpeed = 0.5;
+        const API_BASE = 'http://localhost:3000/api';
 
-            // Initialize
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
             switchTab('live-view');
 
             // Speed slider event
@@ -1006,33 +1006,34 @@
 
             // Check server health
             checkServerHealth();
+        });
 
-            // Tab Switching
-            window.switchTab = function(tabId) {
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-                document.getElementById(tabId).classList.add('active');
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
 
-                const tabs = Array.from(document.querySelectorAll('.nav-tab'));
-                const tabNames = ['live-view', 'profiles', 'tech-stack', 'guide'];
-                const index = tabNames.indexOf(tabId);
-                if (index !== -1) tabs[index].classList.add('active');
-            }
+            const tabs = Array.from(document.querySelectorAll('.nav-tab'));
+            const tabNames = ['live-view', 'profiles', 'tech-stack', 'guide'];
+            const index = tabNames.indexOf(tabId);
+            if (index !== -1) tabs[index].classList.add('active');
+        }
 
-            // Toast Notification System
-            function showToast(type, title, message) {
-                const container = document.getElementById('notification-container');
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
+        // Toast Notification System
+        function showToast(type, title, message) {
+            const container = document.getElementById('notification-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
 
-                const icons = {
-                    success: '✅',
-                    error: '❌',
-                    warning: '⚠️',
-                    info: 'ℹ️'
-                };
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
 
-                toast.innerHTML = `
+            toast.innerHTML = `
                 <div class="toast-icon">${icons[type]}</div>
                 <div class="toast-content">
                     <div class="toast-title">${title}</div>
@@ -1040,94 +1041,94 @@
                 </div>
             `;
 
-                container.appendChild(toast);
+            container.appendChild(toast);
 
-                setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => toast.classList.add('show'), 100);
 
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 500);
-                }, 5000);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
+        }
+
+        // Check Server Health
+        async function checkServerHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                if (data.success) {
+                    console.log('✅ Server is running');
+                }
+            } catch (error) {
+                showToast('error', 'Server Error', 'Backend server tidak dapat diakses. Pastikan server sudah running!');
+                console.error('Server not reachable:', error);
+            }
+        }
+
+        // Connect Camera
+        async function connectCamera() {
+            const connectBtn = document.getElementById('btn-connect');
+            const connectingIndicator = document.getElementById('connecting-indicator');
+
+            connectBtn.disabled = true;
+            connectingIndicator.classList.add('visible');
+
+            const ip = document.getElementById('cameraIp').value.trim();
+            const port = document.getElementById('onvifPort').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!ip || !port || !username ) {
+                showToast('warning', 'Input Tidak Lengkap', 'Mohon isi semua field yang diperlukan');
+                connectBtn.disabled = false;
+                connectingIndicator.classList.remove('visible');
+                return;
             }
 
-            // Check Server Health
-            async function checkServerHealth() {
-                try {
-                    const response = await fetch(`${API_BASE}/health`);
-                    const data = await response.json();
-                    if (data.success) {
-                        console.log('✅ Server is running');
-                    }
-                } catch (error) {
-                    showToast('error', 'Server Error', 'Backend server tidak dapat diakses. Pastikan server sudah running!');
-                    console.error('Server not reachable:', error);
+            try {
+                const response = await fetch(`${API_BASE}/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip, port, username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    cameraConnected = true;
+                    updateUIState(true);
+                    updateStatus(true, data.profiles);
+                    displayProfiles(data.profiles);
+
+                    showToast('success', 'Koneksi Berhasil!',
+                        `Terhubung ke ${data.info.manufacturer} ${data.info.model}`);
+
+                    // Load presets
+                    setTimeout(() => loadPresets(), 1000);
+                } else {
+                    showToast('error', 'Koneksi Gagal', data.error);
                 }
+            } catch (error) {
+                showToast('error', 'Error', 'Tidak dapat terhubung ke server: ' + error.message);
+            } finally {
+                connectBtn.disabled = false;
+                connectingIndicator.classList.remove('visible');
             }
+        }
 
-            // Connect Camera
-            window.connectCamera = async function() {
-                const connectBtn = document.getElementById('btn-connect');
-                const connectingIndicator = document.getElementById('connecting-indicator');
+        // Disconnect Camera
+        async function disconnectCamera() {
+            try {
+                await fetch(`${API_BASE}/disconnect`, { method: 'POST' });
 
-                connectBtn.disabled = true;
-                connectingIndicator.classList.add('visible');
+                cameraConnected = false;
+                streamActive = false;
+                updateUIState(false);
+                updateStatus(false);
 
-                const ip = document.getElementById('cameraIp').value.trim();
-                const port = document.getElementById('onvifPort').value.trim();
-                const username = document.getElementById('username').value.trim();
-                const password = document.getElementById('password').value;
-
-                if (!ip || !port || !username ) {
-                    showToast('warning', 'Input Tidak Lengkap', 'Mohon isi semua field yang diperlukan');
-                    connectBtn.disabled = false;
-                    connectingIndicator.classList.remove('visible');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`${API_BASE}/connect`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ip, port, username, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        cameraConnected = true;
-                        updateUIState(true);
-                        updateStatus(true, data.profiles);
-                        displayProfiles(data.profiles);
-
-                        showToast('success', 'Koneksi Berhasil!',
-                            `Terhubung ke ${data.info.manufacturer} ${data.info.model}`);
-
-                        // Load presets
-                        setTimeout(() => loadPresets(), 1000);
-                    } else {
-                        showToast('error', 'Koneksi Gagal', data.error);
-                    }
-                } catch (error) {
-                    showToast('error', 'Error', 'Tidak dapat terhubung ke server: ' + error.message);
-                } finally {
-                    connectBtn.disabled = false;
-                    connectingIndicator.classList.remove('visible');
-                }
-            }
-
-            // Disconnect Camera
-            window.disconnectCamera = async function() {
-                try {
-                    await fetch(`${API_BASE}/disconnect`, { method: 'POST' });
-
-                    cameraConnected = false;
-                    streamActive = false;
-                    updateUIState(false);
-                    updateStatus(false);
-
-                    // Reset video container
-                    const videoContainer = document.querySelector('.video-container');
-                    videoContainer.innerHTML = `
+                // Reset video container
+                const videoContainer = document.querySelector('.video-container');
+                videoContainer.innerHTML = `
                     <div class="connecting-overlay" id="connecting-indicator">
                         <div class="loader"></div>
                         <p>Menyambungkan...</p>
@@ -1139,68 +1140,68 @@
                     </div>
                 `;
 
-                    // Clear preset list
-                    document.getElementById('preset-list').innerHTML = `
+                // Clear preset list
+                document.getElementById('preset-list').innerHTML = `
                     <p style="text-align: center; color: #999; padding: 20px;">
                         Tidak ada preset tersedia
                     </p>
                 `;
 
-                    showToast('info', 'Disconnected', 'Kamera berhasil diputus');
-                } catch (error) {
-                    showToast('error', 'Error', 'Gagal memutus koneksi');
-                }
+                showToast('info', 'Disconnected', 'Kamera berhasil diputus');
+            } catch (error) {
+                showToast('error', 'Error', 'Gagal memutus koneksi');
+            }
+        }
+
+        // Update UI State
+        function updateUIState(connected) {
+            // Connection buttons
+            document.getElementById('btn-connect').disabled = connected;
+            document.getElementById('btn-disconnect').disabled = !connected;
+
+            // Stream buttons
+            document.getElementById('btn-start-stream').disabled = !connected;
+            document.getElementById('btn-stop-stream').disabled = !connected || !streamActive;
+
+            // PTZ controls
+            const ptzButtons = ['ptz-upleft', 'ptz-up', 'ptz-upright', 'ptz-left', 'ptz-stop',
+                'ptz-right', 'ptz-downleft', 'ptz-down', 'ptz-downright',
+                'zoom-in', 'zoom-out'];
+            ptzButtons.forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.disabled = !connected;
+            });
+
+            // Preset controls
+            document.getElementById('preset-name').disabled = !connected;
+            document.getElementById('btn-save-preset').disabled = !connected;
+            document.getElementById('btn-refresh-presets').disabled = !connected;
+
+            // Connection status
+            const statusEl = document.getElementById('connection-status');
+            if (connected) {
+                statusEl.innerHTML = '<span class="status-indicator status-online"></span><span>Terhubung</span>';
+            } else {
+                statusEl.innerHTML = '<span class="status-indicator status-offline"></span><span>Tidak Terhubung</span>';
+            }
+        }
+
+        // Display Profiles
+        function displayProfiles(profiles) {
+            const contentDiv = document.getElementById('profile-info-content');
+
+            if (!profiles || profiles.length === 0) {
+                contentDiv.innerHTML = '<p style="text-align: center; color: #999;">Tidak ada media profile yang ditemukan.</p>';
+                return;
             }
 
-            // Update UI State
-            function updateUIState(connected) {
-                // Connection buttons
-                document.getElementById('btn-connect').disabled = connected;
-                document.getElementById('btn-disconnect').disabled = !connected;
+            let html = '<div style="display: grid; gap: 15px;">';
 
-                // Stream buttons
-                document.getElementById('btn-start-stream').disabled = !connected;
-                document.getElementById('btn-stop-stream').disabled = !connected || !streamActive;
+            profiles.forEach((profile, index) => {
+                const videoConfig = profile.video?.encoder || {};
+                const audioConfig = profile.audio?.encoder || {};
 
-                // PTZ controls
-                const ptzButtons = ['ptz-upleft', 'ptz-up', 'ptz-upright', 'ptz-left', 'ptz-stop',
-                    'ptz-right', 'ptz-downleft', 'ptz-down', 'ptz-downright',
-                    'zoom-in', 'zoom-out'];
-                ptzButtons.forEach(id => {
-                    const btn = document.getElementById(id);
-                    if (btn) btn.disabled = !connected;
-                });
-
-                // Preset controls
-                document.getElementById('preset-name').disabled = !connected;
-                document.getElementById('btn-save-preset').disabled = !connected;
-                document.getElementById('btn-refresh-presets').disabled = !connected;
-
-                // Connection status
-                const statusEl = document.getElementById('connection-status');
-                if (connected) {
-                    statusEl.innerHTML = '<span class="status-indicator status-online"></span><span>Terhubung</span>';
-                } else {
-                    statusEl.innerHTML = '<span class="status-indicator status-offline"></span><span>Tidak Terhubung</span>';
-                }
-            }
-
-            // Display Profiles
-            function displayProfiles(profiles) {
-                const contentDiv = document.getElementById('profile-info-content');
-
-                if (!profiles || profiles.length === 0) {
-                    contentDiv.innerHTML = '<p style="text-align: center; color: #999;">Tidak ada media profile yang ditemukan.</p>';
-                    return;
-                }
-
-                let html = '<div style="display: grid; gap: 15px;">';
-
-                profiles.forEach((profile, index) => {
-                    const videoConfig = profile.video?.encoder || {};
-                    const audioConfig = profile.audio?.encoder || {};
-
-                    html += `
+                html += `
                     <div class="tech-item">
                         <h3>📊 Profile ${index + 1}: ${profile.name || 'Unnamed'}</h3>
                         <ul class="tech-list">
@@ -1214,23 +1215,23 @@
                         </ul>
                     </div>
                 `;
-                });
+            });
 
-                html += '</div>';
-                contentDiv.innerHTML = html;
+            html += '</div>';
+            contentDiv.innerHTML = html;
+        }
+
+        // Load Stream
+        function loadStream() {
+            if (!cameraConnected) {
+                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
+                return;
             }
 
-            // Load Stream
-            window.loadStream = function() {
-                if (!cameraConnected) {
-                    showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                    return;
-                }
+            const videoContainer = document.querySelector('.video-container');
+            const timestamp = new Date().getTime();
 
-                const videoContainer = document.querySelector('.video-container');
-                const timestamp = new Date().getTime();
-
-                videoContainer.innerHTML = `
+            videoContainer.innerHTML = `
                 <div class="connecting-overlay visible" id="stream-connecting">
                     <div class="loader"></div>
                     <p>Loading stream...</p>
@@ -1241,24 +1242,24 @@
                      onerror="handleStreamError(this)">
             `;
 
-                streamActive = true;
-                document.getElementById('btn-stop-stream').disabled = false;
+            streamActive = true;
+            document.getElementById('btn-stop-stream').disabled = false;
 
-                showToast('info', 'Starting Stream', 'Memuat video stream...');
-            }
+            showToast('info', 'Starting Stream', 'Memuat video stream...');
+        }
 
-            // Handle Stream Load
-            window.handleStreamLoad = function() {
-                const overlay = document.getElementById('stream-connecting');
-                if (overlay) overlay.classList.remove('visible');
-                updateStatus(true);
-                showToast('success', 'Stream Active', 'Video streaming berhasil dimulai');
-            }
+        // Handle Stream Load
+        function handleStreamLoad() {
+            const overlay = document.getElementById('stream-connecting');
+            if (overlay) overlay.classList.remove('visible');
+            updateStatus(true);
+            showToast('success', 'Stream Active', 'Video streaming berhasil dimulai');
+        }
 
-            // Handle Stream Error
-            window.handleStreamError = function(img) {
-                streamActive = false;
-                img.parentElement.innerHTML = `
+        // Handle Stream Error
+        function handleStreamError(img) {
+            streamActive = false;
+            img.parentElement.innerHTML = `
                 <div class="video-placeholder">
                     <div class="icon">❌</div>
                     <h3>Stream Error</h3>
@@ -1270,13 +1271,13 @@
                     </ul>
                 </div>
             `;
-                showToast('error', 'Stream Failed', 'Gagal memuat video stream');
-            }
+            showToast('error', 'Stream Failed', 'Gagal memuat video stream');
+        }
 
-            // Stop Stream
-            window.stopStream = function() {
-                const videoContainer = document.querySelector('.video-container');
-                videoContainer.innerHTML = `
+        // Stop Stream
+        function stopStream() {
+            const videoContainer = document.querySelector('.video-container');
+            videoContainer.innerHTML = `
                 <div class="connecting-overlay" id="connecting-indicator">
                     <div class="loader"></div>
                     <p>Menyambungkan...</p>
@@ -1288,127 +1289,127 @@
                 </div>
             `;
 
-                streamActive = false;
-                document.getElementById('btn-stop-stream').disabled = true;
-                updateStatus(true);
+            streamActive = false;
+            document.getElementById('btn-stop-stream').disabled = true;
+            updateStatus(true);
 
-                showToast('info', 'Stream Stopped', 'Video streaming dihentikan');
+            showToast('info', 'Stream Stopped', 'Video streaming dihentikan');
+        }
+
+        // Update Status
+        function updateStatus(online, profiles = []) {
+            const statusValue = document.getElementById('status-value');
+            const resolutionValue = document.getElementById('resolution-value');
+            const fpsValue = document.getElementById('fps-value');
+            const bitrateValue = document.getElementById('bitrate-value');
+
+            if (online && profiles.length > 0) {
+                statusValue.innerHTML = '<span class="status-indicator status-online"></span>Online';
+
+                const firstProfile = profiles[0];
+                if (firstProfile.video && firstProfile.video.encoder) {
+                    const encoder = firstProfile.video.encoder;
+                    resolutionValue.textContent = `${encoder.resolution.width}x${encoder.resolution.height}`;
+                    fpsValue.textContent = encoder.framerate + ' fps';
+                    bitrateValue.textContent = `${encoder.bitrate} kbps`;
+                }
+            } else if (online) {
+                statusValue.innerHTML = '<span class="status-indicator status-online"></span>Online';
+            } else {
+                statusValue.innerHTML = '<span class="status-indicator status-offline"></span>Offline';
+                resolutionValue.textContent = '-';
+                fpsValue.textContent = '-';
+                bitrateValue.textContent = '-';
+            }
+        }
+
+        // PTZ Move
+        async function ptzMove(direction) {
+            if (!cameraConnected) {
+                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
+                return;
             }
 
-            // Update Status
-            function updateStatus(online, profiles = []) {
-                const statusValue = document.getElementById('status-value');
-                const resolutionValue = document.getElementById('resolution-value');
-                const fpsValue = document.getElementById('fps-value');
-                const bitrateValue = document.getElementById('bitrate-value');
+            try {
+                const response = await fetch(`${API_BASE}/ptz/move`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ direction, speed: currentSpeed })
+                });
 
-                if (online && profiles.length > 0) {
-                    statusValue.innerHTML = '<span class="status-indicator status-online"></span>Online';
+                const data = await response.json();
 
-                    const firstProfile = profiles[0];
-                    if (firstProfile.video && firstProfile.video.encoder) {
-                        const encoder = firstProfile.video.encoder;
-                        resolutionValue.textContent = `${encoder.resolution.width}x${encoder.resolution.height}`;
-                        fpsValue.textContent = encoder.framerate + ' fps';
-                        bitrateValue.textContent = `${encoder.bitrate} kbps`;
-                    }
-                } else if (online) {
-                    statusValue.innerHTML = '<span class="status-indicator status-online"></span>Online';
+                if (!data.success) {
+                    showToast('error', 'PTZ Error', data.error);
+                }
+            } catch (error) {
+                showToast('error', 'PTZ Error', 'Gagal mengirim perintah: ' + error.message);
+            }
+        }
+
+        // PTZ Stop
+        async function ptzStop() {
+            if (!cameraConnected) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/ptz/stop`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showToast('error', 'PTZ Error', data.error);
+                }
+            } catch (error) {
+                showToast('error', 'PTZ Error', 'Gagal menghentikan gerakan');
+            }
+        }
+
+        // PTZ Zoom
+        async function ptzZoom(direction) {
+            if (!cameraConnected) {
+                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/ptz/zoom`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ direction, speed: currentSpeed })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showToast('error', 'Zoom Error', data.error);
                 } else {
-                    statusValue.innerHTML = '<span class="status-indicator status-offline"></span>Offline';
-                    resolutionValue.textContent = '-';
-                    fpsValue.textContent = '-';
-                    bitrateValue.textContent = '-';
+                    showToast('info', 'Zoom', `Zooming ${direction}...`);
                 }
+            } catch (error) {
+                showToast('error', 'Zoom Error', 'Gagal zoom: ' + error.message);
+            }
+        }
+
+        // Load Presets
+        async function loadPresets() {
+            if (!cameraConnected) {
+                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
+                return;
             }
 
-            // PTZ Move
-            window.ptzMove = async function(direction) {
-                if (!cameraConnected) {
-                    showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                    return;
-                }
+            try {
+                const response = await fetch(`${API_BASE}/ptz/presets`);
+                const data = await response.json();
 
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/move`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ direction, speed: currentSpeed })
-                    });
+                const presetList = document.getElementById('preset-list');
 
-                    const data = await response.json();
+                if (data.success && data.presets && data.presets.length > 0) {
+                    let html = '';
 
-                    if (!data.success) {
-                        showToast('error', 'PTZ Error', data.error);
-                    }
-                } catch (error) {
-                    showToast('error', 'PTZ Error', 'Gagal mengirim perintah: ' + error.message);
-                }
-            }
-
-            // PTZ Stop
-            window.ptzStop = async function() {
-                if (!cameraConnected) return;
-
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/stop`, {
-                        method: 'POST'
-                    });
-
-                    const data = await response.json();
-
-                    if (!data.success) {
-                        showToast('error', 'PTZ Error', data.error);
-                    }
-                } catch (error) {
-                    showToast('error', 'PTZ Error', 'Gagal menghentikan gerakan');
-                }
-            }
-
-            // PTZ Zoom
-            window.ptzZoom = async function(direction) {
-                if (!cameraConnected) {
-                    showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/zoom`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ direction, speed: currentSpeed })
-                    });
-
-                    const data = await response.json();
-
-                    if (!data.success) {
-                        showToast('error', 'Zoom Error', data.error);
-                    } else {
-                        showToast('info', 'Zoom', `Zooming ${direction}...`);
-                    }
-                } catch (error) {
-                    showToast('error', 'Zoom Error', 'Gagal zoom: ' + error.message);
-                }
-            }
-
-            // Load Presets
-            window.loadPresets = async function() {
-                if (!cameraConnected) {
-                    showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/presets`);
-                    const data = await response.json();
-
-                    const presetList = document.getElementById('preset-list');
-
-                    if (data.success && data.presets && data.presets.length > 0) {
-                        let html = '';
-
-                        data.presets.forEach(preset => {
-                            html += `
+                    data.presets.forEach(preset => {
+                        html += `
                             <div class="preset-item">
                                 <div>
                                     <div class="preset-name">${preset.name || 'Preset ' + preset.token}</div>
@@ -1424,167 +1425,166 @@
                                 </div>
                             </div>
                         `;
-                        });
+                    });
 
-                        presetList.innerHTML = html;
-                        showToast('success', 'Presets Loaded', `${data.presets.length} preset ditemukan`);
-                    } else {
-                        presetList.innerHTML = `
+                    presetList.innerHTML = html;
+                    showToast('success', 'Presets Loaded', `${data.presets.length} preset ditemukan`);
+                } else {
+                    presetList.innerHTML = `
                         <p style="text-align: center; color: #999; padding: 20px;">
                             Tidak ada preset tersimpan
                         </p>
                     `;
-                        showToast('info', 'No Presets', 'Belum ada preset yang tersimpan');
-                    }
-                } catch (error) {
-                    showToast('error', 'Error', 'Gagal memuat presets: ' + error.message);
+                    showToast('info', 'No Presets', 'Belum ada preset yang tersimpan');
                 }
+            } catch (error) {
+                showToast('error', 'Error', 'Gagal memuat presets: ' + error.message);
+            }
+        }
+
+        // Save Preset
+        async function savePreset() {
+            if (!cameraConnected) {
+                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
+                return;
             }
 
-            // Save Preset
-            window.savePreset = async function() {
-                if (!cameraConnected) {
-                    showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                    return;
-                }
+            const presetName = document.getElementById('preset-name').value.trim();
 
-                const presetName = document.getElementById('preset-name').value.trim();
-
-                if (!presetName) {
-                    showToast('warning', 'Input Kosong', 'Masukkan nama preset!');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/preset/set`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: presetName })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        showToast('success', 'Preset Saved', `Preset "${presetName}" berhasil disimpan`);
-                        document.getElementById('preset-name').value = '';
-
-                        // Reload presets
-                        setTimeout(() => loadPresets(), 500);
-                    } else {
-                        showToast('error', 'Save Failed', data.error);
-                    }
-                } catch (error) {
-                    showToast('error', 'Error', 'Gagal menyimpan preset: ' + error.message);
-                }
+            if (!presetName) {
+                showToast('warning', 'Input Kosong', 'Masukkan nama preset!');
+                return;
             }
 
-            // Goto Preset
-            window.gotoPreset = async function(token) {
-                if (!cameraConnected) return;
+            try {
+                const response = await fetch(`${API_BASE}/ptz/preset/set`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: presetName })
+                });
 
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/preset/goto`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ preset: token })
-                    });
+                const data = await response.json();
 
-                    const data = await response.json();
+                if (data.success) {
+                    showToast('success', 'Preset Saved', `Preset "${presetName}" berhasil disimpan`);
+                    document.getElementById('preset-name').value = '';
 
-                    if (data.success) {
-                        showToast('success', 'Moving to Preset', 'Kamera bergerak ke posisi preset');
-                    } else {
-                        showToast('error', 'Error', data.error);
-                    }
-                } catch (error) {
-                    showToast('error', 'Error', 'Gagal pindah ke preset: ' + error.message);
+                    // Reload presets
+                    setTimeout(() => loadPresets(), 500);
+                } else {
+                    showToast('error', 'Save Failed', data.error);
                 }
+            } catch (error) {
+                showToast('error', 'Error', 'Gagal menyimpan preset: ' + error.message);
+            }
+        }
+
+        // Goto Preset
+        async function gotoPreset(token) {
+            if (!cameraConnected) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/ptz/preset/goto`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset: token })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('success', 'Moving to Preset', 'Kamera bergerak ke posisi preset');
+                } else {
+                    showToast('error', 'Error', data.error);
+                }
+            } catch (error) {
+                showToast('error', 'Error', 'Gagal pindah ke preset: ' + error.message);
+            }
+        }
+
+        // Delete Preset
+        async function deletePreset(token) {
+            if (!cameraConnected) return;
+
+            if (!confirm('Apakah Anda yakin ingin menghapus preset ini?')) {
+                return;
             }
 
-            // Delete Preset
-            window.deletePreset = async function(token) {
-                if (!cameraConnected) return;
+            try {
+                const response = await fetch(`${API_BASE}/ptz/preset/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset: token })
+                });
 
-                if (!confirm('Apakah Anda yakin ingin menghapus preset ini?')) {
-                    return;
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('success', 'Preset Deleted', 'Preset berhasil dihapus');
+
+                    // Reload presets
+                    setTimeout(() => loadPresets(), 500);
+                } else {
+                    showToast('error', 'Delete Failed', data.error);
                 }
-
-                try {
-                    const response = await fetch(`${API_BASE}/ptz/preset/delete`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ preset: token })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        showToast('success', 'Preset Deleted', 'Preset berhasil dihapus');
-
-                        // Reload presets
-                        setTimeout(() => loadPresets(), 500);
-                    } else {
-                        showToast('error', 'Delete Failed', data.error);
-                    }
-                } catch (error) {
-                    showToast('error', 'Error', 'Gagal menghapus preset: ' + error.message);
-                }
+            } catch (error) {
+                showToast('error', 'Error', 'Gagal menghapus preset: ' + error.message);
             }
+        }
 
-            // Keyboard shortcuts for PTZ control
-            document.addEventListener('keydown', (e) => {
-                if (!cameraConnected) return;
+        // Keyboard shortcuts for PTZ control
+        document.addEventListener('keydown', (e) => {
+            if (!cameraConnected) return;
 
-                // Only work when not typing in input fields
-                if (e.target.tagName === 'INPUT') return;
+            // Only work when not typing in input fields
+            if (e.target.tagName === 'INPUT') return;
 
-                switch (e.key) {
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        ptzMove('up');
-                        break;
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        ptzMove('down');
-                        break;
-                    case 'ArrowLeft':
-                        e.preventDefault();
-                        ptzMove('left');
-                        break;
-                    case 'ArrowRight':
-                        e.preventDefault();
-                        ptzMove('right');
-                        break;
-                    case ' ':
-                    case 'Escape':
-                        e.preventDefault();
-                        ptzStop();
-                        break;
-                    case '+':
-                    case '=':
-                        e.preventDefault();
-                        ptzZoom('in');
-                        break;
-                    case '-':
-                    case '_':
-                        e.preventDefault();
-                        ptzZoom('out');
-                        break;
-                }
-            });
-
-            // Auto-stop PTZ on key release (for better control)
-            let moveTimeout;
-            const originalPtzMove = ptzMove;
-            window.ptzMove = function (direction) {
-                originalPtzMove(direction);
-
-                clearTimeout(moveTimeout);
-                moveTimeout = setTimeout(() => {
+            switch (e.key) {
+                case 'ArrowUp':
+                    e.preventDefault();
+                    ptzMove('up');
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    ptzMove('down');
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    ptzMove('left');
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    ptzMove('right');
+                    break;
+                case ' ':
+                case 'Escape':
+                    e.preventDefault();
                     ptzStop();
-                }, 1000);
-            };
+                    break;
+                case '+':
+                case '=':
+                    e.preventDefault();
+                    ptzZoom('in');
+                    break;
+                case '-':
+                case '_':
+                    e.preventDefault();
+                    ptzZoom('out');
+                    break;
+            }
         });
+
+        // Auto-stop PTZ on key release (for better control)
+        let moveTimeout;
+        const originalPtzMove = ptzMove;
+        ptzMove = function (direction) {
+            originalPtzMove(direction);
+
+            clearTimeout(moveTimeout);
+            moveTimeout = setTimeout(() => {
+                ptzStop();
+            }, 1000);
+        };
     </script>
 </body>
 
