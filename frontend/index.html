@@ -5,1675 +5,341 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ONVIF PTZ Camera Control System</title>
-    <style>
-        :root {
-            --primary-dark: #1e3c72;
-            --primary-light: #2a5298;
-            --accent-color: #667eea;
-            --gradient-start: #667eea;
-            --gradient-end: #764ba2;
-            --text-light: #fff;
-            --text-dark: #333;
-            --bg-light: rgba(255, 255, 255, 0.98);
-            --border-color: #e0e0e0;
-            --danger-color: #f44336;
-            --success-color: #4caf50;
-            --warning-color: #ff9800;
-        }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-light) 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1800px;
-            margin: 0 auto;
-        }
-
-        .header {
-            background: var(--bg-light);
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            margin-bottom: 20px;
-        }
-
-        h1 {
-            color: var(--primary-dark);
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .subtitle {
-            color: #666;
-            font-size: 1.1em;
-        }
-
-        .connection-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            background: #f5f5f5;
-            border-radius: 20px;
-            font-size: 0.9em;
-            margin-left: auto;
-        }
-
-        .nav-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        .nav-tab {
-            padding: 12px 25px;
-            cursor: pointer;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            color: var(--text-dark);
-            font-weight: 600;
-            transition: all 0.3s;
-            border: 2px solid transparent;
-        }
-
-        .nav-tab:hover {
-            background: var(--text-light);
-            border-color: var(--accent-color);
-            transform: translateY(-2px);
-        }
-
-        .nav-tab.active {
-            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
-            color: var(--text-light);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-            transform: translateY(-2px);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr 450px;
-            gap: 20px;
-        }
-
-        .video-section,
-        .control-panel-wrapper,
-        .info-card {
-            background: var(--bg-light);
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .video-container {
-            position: relative;
-            width: 100%;
-            padding-top: 56.25%;
-            background: #000;
-            border-radius: 15px;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
-
-        .video-placeholder {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-light);
-            text-align: center;
-            padding: 20px;
-        }
-
-        .video-placeholder .icon {
-            font-size: 5em;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-
-        .connecting-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            color: white;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-        }
-
-        .connecting-overlay.visible {
-            opacity: 1;
-            pointer-events: all;
-        }
-
-        .loader {
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid var(--accent-color);
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .video-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            padding: 15px;
-            background: #f5f5f5;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-
-        .info-item {
-            margin-bottom: 0;
-        }
-
-        .info-label {
-            font-size: 0.85em;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
-        .info-value {
-            font-size: 1.2em;
-            font-weight: 600;
-            color: var(--primary-dark);
-        }
-
-        .section-title {
-            font-size: 1.3em;
-            color: var(--primary-dark);
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #555;
-            font-size: 0.9em;
-        }
-
-        input[type="text"],
-        input[type="password"],
-        input[type="number"],
-        select {
-            width: 100%;
-            padding: 10px 12px;
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
-
-        input:focus,
-        select:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-
-        .btn {
-            width: 100%;
-            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
-            color: var(--text-light);
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: 600;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #f44336 0%, #e91e63 100%);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
-        }
-
-        .btn-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-            transition: background-color 0.5s;
-        }
-
-        .status-online {
-            background: var(--success-color);
-            box-shadow: 0 0 12px var(--success-color);
-            animation: pulse 2s infinite;
-        }
-
-        .status-offline {
-            background: var(--danger-color);
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                box-shadow: 0 0 5px rgba(76, 175, 80, 0.4);
-            }
-
-            50% {
-                box-shadow: 0 0 15px rgba(76, 175, 80, 1);
-            }
-        }
-
-        /* PTZ Controls */
-        .ptz-controls {
-            margin-top: 20px;
-        }
-
-        .ptz-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-
-        .ptz-btn {
-            background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
-            border: 2px solid var(--border-color);
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 1.8em;
-            transition: all 0.2s;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            aspect-ratio: 1;
-            min-height: 60px;
-        }
-
-        .ptz-btn:hover:not(:disabled) {
-            background: linear-gradient(135deg, #e0e0e0 0%, #d0d0d0 100%);
-            border-color: var(--accent-color);
-            transform: scale(1.05);
-        }
-
-        .ptz-btn:active:not(:disabled) {
-            background: var(--accent-color);
-            color: var(--text-light);
-            transform: scale(0.95);
-        }
-
-        .ptz-btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-
-        #ptz-stop {
-            background: linear-gradient(135deg, var(--danger-color) 0%, #c62828 100%);
-            color: white;
-            font-size: 1.3em;
-            font-weight: bold;
-            border-color: var(--danger-color);
-        }
-
-        #ptz-stop:hover:not(:disabled) {
-            background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
-        }
-
-        .zoom-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .zoom-btn {
-            padding: 15px;
-            font-size: 1.3em;
-        }
-
-        .speed-control {
-            margin-bottom: 20px;
-        }
-
-        .speed-slider {
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        .speed-value {
-            text-align: center;
-            font-weight: 600;
-            color: var(--accent-color);
-            margin-top: 5px;
-        }
-
-        /* Preset Controls */
-        .preset-section {
-            margin-top: 20px;
-        }
-
-        .preset-list {
-            max-height: 200px;
-            overflow-y: auto;
-            margin-bottom: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 10px;
-        }
-
-        .preset-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px;
-            background: white;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s;
-        }
-
-        .preset-item:hover {
-            border-color: var(--accent-color);
-            transform: translateX(5px);
-        }
-
-        .preset-name {
-            font-weight: 600;
-            color: var(--text-dark);
-        }
-
-        .preset-token {
-            font-size: 0.8em;
-            color: #999;
-        }
-
-        .preset-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .preset-btn {
-            padding: 5px 12px;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-size: 0.85em;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .preset-btn.goto {
-            background: var(--accent-color);
-            color: white;
-        }
-
-        .preset-btn.delete {
-            background: var(--danger-color);
-            color: white;
-        }
-
-        .preset-btn:hover {
-            transform: scale(1.05);
-        }
-
-        .preset-form {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .preset-form input {
-            flex: 1;
-        }
-
-        .preset-form button {
-            width: auto;
-            padding: 0 20px;
-        }
-
-        /* Notification System */
-        #notification-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-width: 400px;
-        }
-
-        .toast {
-            background: #fff;
-            padding: 15px 20px;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            opacity: 0;
-            transform: translateX(400px);
-            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateX(0);
-        }
-
-        .toast.success {
-            border-left: 5px solid var(--success-color);
-        }
-
-        .toast.error {
-            border-left: 5px solid var(--danger-color);
-        }
-
-        .toast.warning {
-            border-left: 5px solid var(--warning-color);
-        }
-
-        .toast.info {
-            border-left: 5px solid var(--accent-color);
-        }
-
-        .toast-icon {
-            font-size: 1.8em;
-            flex-shrink: 0;
-        }
-
-        .toast-content {
-            flex: 1;
-        }
-
-        .toast-title {
-            font-weight: 600;
-            margin-bottom: 3px;
-        }
-
-        .toast-message {
-            font-size: 0.9em;
-            color: #666;
-        }
-
-        .code-block {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 20px;
-            border-radius: 10px;
-            overflow-x: auto;
-            margin-top: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-        }
-
-        .step {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--accent-color);
-        }
-
-        .step strong {
-            color: var(--accent-color);
-        }
-
-        .tech-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--accent-color);
-        }
-
-        .tech-item h3 {
-            color: var(--primary-dark);
-            margin-bottom: 10px;
-        }
-
-        .tech-list {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .tech-list li {
-            padding: 5px 0;
-            color: #555;
-        }
-
-        .tech-list li:before {
-            content: "✓ ";
-            color: var(--success-color);
-            font-weight: bold;
-            margin-right: 8px;
-        }
-
-        @media (max-width: 1200px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-
-            h1 {
-                font-size: 2em;
-            }
-
-            .nav-tabs {
-                overflow-x: auto;
-            }
-        }
-
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-
-            .header {
-                padding: 20px;
-            }
-
-            h1 {
-                font-size: 1.5em;
-            }
-
-            .ptz-grid {
-                gap: 5px;
-            }
-
-            .ptz-btn {
-                font-size: 1.5em;
-                min-height: 50px;
-            }
-
-            #notification-container {
-                left: 10px;
-                right: 10px;
-                max-width: none;
-            }
-        }
-    </style>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div id="notification-container"></div>
+    <!-- Toast Container -->
+    <div id="notification-container" class="position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
 
-    <div class="container">
-        <div class="header">
-            <h1>
-                📹 ONVIF PTZ Camera Control System
-                <div class="connection-status" id="connection-status">
-                    <span class="status-indicator status-offline"></span>
-                    <span>Tidak Terhubung</span>
-                </div>
-            </h1>
-            <p class="subtitle">Kontrol lengkap IP camera dengan streaming real-time, PTZ control, dan preset management
-            </p>
-        </div>
-
-        <div class="nav-tabs">
-            <div class="nav-tab active" onclick="switchTab('live-view')">🎥 Live View & Control</div>
-            <div class="nav-tab" onclick="switchTab('profiles')">📊 Camera Profiles</div>
-            <div class="nav-tab" onclick="switchTab('tech-stack')">🛠️ Tech Stack</div>
-            <div class="nav-tab" onclick="switchTab('guide')">📖 Installation Guide</div>
-        </div>
-
-        <!-- TAB: Live View & Control -->
-        <div id="live-view" class="tab-content active">
-            <div class="main-grid">
-                <!-- Video Section -->
-                <div class="video-section">
-                    <h2 class="section-title">📺 Live Stream</h2>
-
-                    <div class="video-info">
-                        <div class="info-item">
-                            <div class="info-label">Status</div>
-                            <div class="info-value" id="status-value">
-                                <span class="status-indicator status-offline"></span>Offline
+    <!-- Main Container -->
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h1 class="h3 mb-1">
+                                    <i class="bi bi-camera-video-fill text-primary"></i>
+                                    ONVIF PTZ Camera Control
+                                </h1>
+                                <p class="text-muted mb-0 small">Real-time camera control & streaming system</p>
+                            </div>
+                            <div class="connection-status" id="connection-status">
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-circle-fill me-1"></i>Offline
+                                </span>
                             </div>
                         </div>
-                        <div class="info-item">
-                            <div class="info-label">Resolusi</div>
-                            <div class="info-value" id="resolution-value">-</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">FPS</div>
-                            <div class="info-value" id="fps-value">-</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Bitrate</div>
-                            <div class="info-value" id="bitrate-value">-</div>
-                        </div>
-                    </div>
-
-                    <div class="video-container">
-                        <div class="connecting-overlay" id="connecting-indicator">
-                            <div class="loader"></div>
-                            <p>Menyambungkan...</p>
-                        </div>
-                        <div class="video-placeholder" id="video-placeholder-content">
-                            <div class="icon">📹</div>
-                            <h3>Stream Belum Tersedia</h3>
-                            <p>Hubungkan ke kamera untuk memulai live streaming</p>
-                        </div>
-                    </div>
-
-                    <div class="btn-grid">
-                        <button class="btn btn-success" onclick="loadStream()" id="btn-start-stream" disabled>
-                            ▶️ Mulai Stream
-                        </button>
-                        <button class="btn btn-danger" onclick="stopStream()" id="btn-stop-stream" disabled>
-                            ⏹️ Stop Stream
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Control Panel -->
-                <div class="control-panel-wrapper">
-                    <h2 class="section-title">⚙️ Pengaturan Kamera</h2>
-
-                    <div class="form-group">
-                        <label>IP Address</label>
-                        <input type="text" id="cameraIp" value="192.168.1.9" placeholder="e.g. 192.168.1.100">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Port ONVIF</label>
-                        <input type="number" id="onvifPort" value="835" placeholder="e.g. 80, 8000">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="username" value="avarocam" placeholder="Username kamera">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="password" placeholder="Password kamera">
-                    </div>
-
-                    <div class="btn-grid">
-                        <button class="btn" onclick="connectCamera()" id="btn-connect">
-                            🔗 Hubungkan
-                        </button>
-                        <button class="btn btn-danger" onclick="disconnectCamera()" id="btn-disconnect" disabled>
-                            🔌 Putuskan
-                        </button>
-                    </div>
-
-                    <!-- PTZ Controls -->
-                    <div class="ptz-controls">
-                        <h2 class="section-title">🎮 PTZ Control</h2>
-
-                        <!-- Speed Control -->
-                        <div class="speed-control">
-                            <label>Kecepatan Gerakan</label>
-                            <input type="range" class="speed-slider" id="ptz-speed" min="0.1" max="1" step="0.1"
-                                value="0.5">
-                            <div class="speed-value" id="speed-value">0.5x</div>
-                        </div>
-
-                        <!-- Direction Controls -->
-                        <div class="ptz-grid">
-                            <button class="ptz-btn" onclick="ptzMove('upleft')" id="ptz-upleft" disabled>↖️</button>
-                            <button class="ptz-btn" onclick="ptzMove('up')" id="ptz-up" disabled>⬆️</button>
-                            <button class="ptz-btn" onclick="ptzMove('upright')" id="ptz-upright" disabled>↗️</button>
-
-                            <button class="ptz-btn" onclick="ptzMove('left')" id="ptz-left" disabled>⬅️</button>
-                            <button class="ptz-btn" onclick="ptzStop()" id="ptz-stop" disabled>⏹️</button>
-                            <button class="ptz-btn" onclick="ptzMove('right')" id="ptz-right" disabled>➡️</button>
-
-                            <button class="ptz-btn" onclick="ptzMove('downleft')" id="ptz-downleft" disabled>↙️</button>
-                            <button class="ptz-btn" onclick="ptzMove('down')" id="ptz-down" disabled>⬇️</button>
-                            <button class="ptz-btn" onclick="ptzMove('downright')" id="ptz-downright"
-                                disabled>↘️</button>
-                        </div>
-
-                        <!-- Zoom Controls -->
-                        <div class="zoom-controls">
-                            <button class="btn zoom-btn" onclick="ptzZoom('in')" id="zoom-in" disabled>
-                                🔍 Zoom In
-                            </button>
-                            <button class="btn zoom-btn" onclick="ptzZoom('out')" id="zoom-out" disabled>
-                                🔍 Zoom Out
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Preset Controls -->
-                    <div class="preset-section">
-                        <h2 class="section-title">📍 Preset Positions</h2>
-
-                        <div class="preset-list" id="preset-list">
-                            <p style="text-align: center; color: #999; padding: 20px;">
-                                Tidak ada preset tersedia
-                            </p>
-                        </div>
-
-                        <div class="preset-form">
-                            <input type="text" id="preset-name" placeholder="Nama preset baru" disabled>
-                            <button class="btn" onclick="savePreset()" id="btn-save-preset" disabled>
-                                💾 Simpan
-                            </button>
-                        </div>
-
-                        <button class="btn btn-warning" onclick="loadPresets()" id="btn-refresh-presets" disabled
-                            style="margin-top: 10px;">
-                            🔄 Refresh Presets
-                        </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB: Camera Profiles -->
-        <div id="profiles" class="tab-content">
-            <div class="info-card">
-                <h2 class="section-title">📊 Camera Media Profiles</h2>
-                <div id="profile-info-content">
-                    <p style="color: #666; text-align: center; padding: 40px;">
-                        Hubungkan ke kamera untuk melihat profil media yang tersedia.
-                    </p>
+        <!-- Main Content Row -->
+        <div class="row g-3">
+            <!-- Sidebar Navigation -->
+            <div class="col-lg-2 col-md-3">
+                <div class="card shadow-sm sticky-top" style="top: 20px;">
+                    <div class="list-group list-group-flush">
+                        <a href="#" class="list-group-item list-group-item-action active"
+                            onclick="showSection('live'); return false;">
+                            <i class="bi bi-play-circle me-2"></i>Live View
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action"
+                            onclick="showSection('ptz'); return false;">
+                            <i class="bi bi-joystick me-2"></i>PTZ Control
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action"
+                            onclick="showSection('image'); return false;">
+                            <i class="bi bi-image me-2"></i>Image Settings
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action"
+                            onclick="showSection('audio'); return false;">
+                            <i class="bi bi-volume-up me-2"></i>Audio
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action"
+                            onclick="showSection('detection'); return false;">
+                            <i class="bi bi-exclamation-triangle me-2"></i>Detection
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action"
+                            onclick="showSection('recording'); return false;">
+                            <i class="bi bi-record-circle me-2"></i>Recording
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action"
+                            onclick="showSection('system'); return false;">
+                            <i class="bi bi-gear me-2"></i>System Info
+                        </a>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- TAB: Tech Stack -->
-        <div id="tech-stack" class="tab-content">
-            <div class="info-card">
-                <h2 class="section-title">🛠️ Tech Stack</h2>
-                <p style="margin-bottom: 20px;">Aplikasi ini dibangun menggunakan teknologi modern untuk kontrol kamera
-                    ONVIF:</p>
+            <!-- Main Content Area -->
+            <div class="col-lg-10 col-md-9">
+                <div class="row g-3">
+                    <!-- Left Column: Video & Controls -->
+                    <div class="col-lg-8">
+                        <!-- Live Video Section -->
+                        <div class="card shadow-sm mb-3" id="section-live">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="bi bi-camera-video me-2"></i>Live Stream</h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Video Stats -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6 col-lg-3">
+                                        <div class="p-2 bg-light rounded text-center">
+                                            <small class="text-muted d-block">Status</small>
+                                            <strong id="status-value" class="text-danger">Offline</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-lg-3">
+                                        <div class="p-2 bg-light rounded text-center">
+                                            <small class="text-muted d-block">Resolution</small>
+                                            <strong id="resolution-value">-</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-lg-3">
+                                        <div class="p-2 bg-light rounded text-center">
+                                            <small class="text-muted d-block">FPS</small>
+                                            <strong id="fps-value">-</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-lg-3">
+                                        <div class="p-2 bg-light rounded text-center">
+                                            <small class="text-muted d-block">Bitrate</small>
+                                            <strong id="bitrate-value">-</strong>
+                                        </div>
+                                    </div>
+                                </div>
 
-                <div class="tech-item">
-                    <h3>🖥️ Backend</h3>
-                    <ul class="tech-list">
-                        <li><strong>Node.js</strong> - Runtime JavaScript untuk server</li>
-                        <li><strong>Express.js</strong> - Framework web untuk API</li>
-                        <li><strong>node-onvif</strong> - Library untuk komunikasi ONVIF</li>
-                        <li><strong>fluent-ffmpeg</strong> - Converter RTSP ke MJPEG</li>
-                        <li><strong>cors</strong> - Cross-Origin Resource Sharing</li>
-                    </ul>
-                </div>
+                                <!-- Video Container -->
+                                <div class="video-container ratio ratio-16x9 bg-dark rounded mb-3">
+                                    <div class="d-flex align-items-center justify-content-center text-white flex-column"
+                                        id="video-placeholder-content">
+                                        <i class="bi bi-camera-video display-1 mb-3 opacity-50"></i>
+                                        <h5>Stream Belum Tersedia</h5>
+                                        <p class="text-muted">Hubungkan ke kamera untuk memulai streaming</p>
+                                    </div>
+                                    <div class="connecting-overlay" id="connecting-indicator">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-3">Menyambungkan...</p>
+                                    </div>
+                                </div>
 
-                <div class="tech-item">
-                    <h3>🎨 Frontend</h3>
-                    <ul class="tech-list">
-                        <li><strong>Vanilla JavaScript</strong> - No framework dependencies</li>
-                        <li><strong>Fetch API</strong> - Modern HTTP requests</li>
-                        <li><strong>CSS3</strong> - Gradients, animations, flexbox & grid</li>
-                        <li><strong>Responsive Design</strong> - Mobile-friendly interface</li>
-                    </ul>
-                </div>
+                                <!-- Stream Controls -->
+                                <div class="d-grid gap-2 d-md-flex">
+                                    <button class="btn btn-success flex-fill" onclick="loadStream()"
+                                        id="btn-start-stream" disabled>
+                                        <i class="bi bi-play-fill me-2"></i>Mulai Stream
+                                    </button>
+                                    <button class="btn btn-danger flex-fill" onclick="stopStream()" id="btn-stop-stream"
+                                        disabled>
+                                        <i class="bi bi-stop-fill me-2"></i>Stop Stream
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
 
-                <div class="tech-item">
-                    <h3>📡 Streaming</h3>
-                    <ul class="tech-list">
-                        <li><strong>RTSP</strong> - Real Time Streaming Protocol</li>
-                        <li><strong>MJPEG</strong> - Motion JPEG untuk browser</li>
-                        <li><strong>FFmpeg</strong> - Video transcoding engine</li>
-                        <li><strong>TCP Transport</strong> - Reliable stream delivery</li>
-                    </ul>
-                </div>
+                        <!-- PTZ Control Section (Hidden by default) -->
+                        <div class="card shadow-sm mb-3 d-none" id="section-ptz">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="bi bi-joystick me-2"></i>PTZ Control</h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Speed Control -->
+                                <div class="mb-4">
+                                    <label class="form-label">Kecepatan Gerakan: <strong
+                                            id="speed-value">0.5x</strong></label>
+                                    <input type="range" class="form-range" id="ptz-speed" min="0.1" max="1" step="0.1"
+                                        value="0.5">
+                                </div>
 
-                <div class="tech-item">
-                    <h3>🎯 Features</h3>
-                    <ul class="tech-list">
-                        <li><strong>PTZ Control</strong> - Pan, Tilt, Zoom real-time</li>
-                        <li><strong>Preset Management</strong> - Save & recall positions</li>
-                        <li><strong>Live Streaming</strong> - MJPEG video feed</li>
-                        <li><strong>Camera Info</strong> - Device details & profiles</li>
-                        <li><strong>Toast Notifications</strong> - User feedback system</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+                                <!-- Direction Controls -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('upleft')" id="ptz-upleft" disabled>
+                                            <i class="bi bi-arrow-up-left"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn" onclick="ptzMove('up')"
+                                            id="ptz-up" disabled>
+                                            <i class="bi bi-arrow-up"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('upright')" id="ptz-upright" disabled>
+                                            <i class="bi bi-arrow-up-right"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('left')" id="ptz-left" disabled>
+                                            <i class="bi bi-arrow-left"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-danger w-100" onclick="ptzStop()" id="ptz-stop" disabled>
+                                            <i class="bi bi-stop-circle"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('right')" id="ptz-right" disabled>
+                                            <i class="bi bi-arrow-right"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('downleft')" id="ptz-downleft" disabled>
+                                            <i class="bi bi-arrow-down-left"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('down')" id="ptz-down" disabled>
+                                            <i class="bi bi-arrow-down"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-4">
+                                        <button class="btn btn-outline-secondary w-100 ptz-btn"
+                                            onclick="ptzMove('downright')" id="ptz-downright" disabled>
+                                            <i class="bi bi-arrow-down-right"></i>
+                                        </button>
+                                    </div>
+                                </div>
 
-        <!-- TAB: Installation Guide -->
-        <div id="guide" class="tab-content">
-            <div class="info-card">
-                <h2 class="section-title">📖 Panduan Instalasi</h2>
+                                <!-- Zoom Controls -->
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <button class="btn btn-primary w-100" onclick="ptzZoom('in')" id="zoom-in"
+                                            disabled>
+                                            <i class="bi bi-zoom-in me-2"></i>Zoom In
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button class="btn btn-primary w-100" onclick="ptzZoom('out')" id="zoom-out"
+                                            disabled>
+                                            <i class="bi bi-zoom-out me-2"></i>Zoom Out
+                                        </button>
+                                    </div>
+                                </div>
 
-                <div class="step">
-                    <h3>1️⃣ Prasyarat</h3>
-                    <p>Pastikan software berikut sudah terinstall di sistem Anda:</p>
-                    <ul class="tech-list">
-                        <li><strong>Node.js</strong> (v14 atau lebih baru)</li>
-                        <li><strong>npm</strong> (Node Package Manager)</li>
-                        <li><strong>FFmpeg</strong> (untuk streaming)</li>
-                    </ul>
-                </div>
+                                <!-- Preset Management -->
+                                <hr class="my-4">
+                                <h6 class="mb-3"><i class="bi bi-bookmark me-2"></i>Preset Positions</h6>
 
-                <div class="step">
-                    <h3>2️⃣ Install FFmpeg</h3>
-                    <p><strong>Windows:</strong></p>
-                    <div class="code-block">
-                        # Download dari: https://ffmpeg.org/download.html
-                        # Extract dan tambahkan ke PATH</div>
-                    <p style="margin-top: 10px;"><strong>Linux:</strong></p>
-                    <div class="code-block">sudo apt update
-                        sudo apt install ffmpeg</div>
-                    <p style="margin-top: 10px;"><strong>macOS:</strong></p>
-                    <div class="code-block">brew install ffmpeg</div>
-                </div>
+                                <div class="mb-3" style="max-height: 300px; overflow-y: auto;" id="preset-list">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>Tidak ada preset tersedia
+                                    </div>
+                                </div>
 
-                <div class="step">
-                    <h3>3️⃣ Install Dependencies</h3>
-                    <p>Buka terminal di folder project dan jalankan:</p>
-                    <div class="code-block">npm install express cors body-parser node-onvif fluent-ffmpeg</div>
-                </div>
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control" id="preset-name"
+                                        placeholder="Nama preset baru" disabled>
+                                    <button class="btn btn-success" onclick="savePreset()" id="btn-save-preset"
+                                        disabled>
+                                        <i class="bi bi-save me-1"></i>Simpan
+                                    </button>
+                                </div>
 
-                <div class="step">
-                    <h3>4️⃣ Jalankan Server</h3>
-                    <p>Start backend server dengan command:</p>
-                    <div class="code-block">node server.js</div>
-                    <p style="margin-top: 10px;">Server akan berjalan di: <strong>http://localhost:3000</strong></p>
-                </div>
+                                <button class="btn btn-outline-secondary w-100" onclick="loadPresets()"
+                                    id="btn-refresh-presets" disabled>
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Refresh Presets
+                                </button>
+                            </div>
+                        </div>
 
-                <div class="step">
-                    <h3>5️⃣ Akses Aplikasi</h3>
-                    <p>Buka file <code>index.html</code> di browser atau gunakan live server.</p>
-                    <p style="margin-top: 10px;"><strong>Catatan:</strong> Pastikan server backend sudah running sebelum
-                        mengakses frontend.</p>
-                </div>
+                        <!-- Image Settings Section (Hidden) -->
+                        <div class="card shadow-sm mb-3 d-none" id="section-image">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="bi bi-image me-2"></i>Image Settings</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Brightness: <strong
+                                            id="brightness-val">50</strong></label>
+                                    <input type="range" class="form-range" id="brightness" min="0" max="100" value="50">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Contrast: <strong id="contrast-val">50</strong></label>
+                                    <input type="range" class="form-range" id="contrast" min="0" max="100" value="50">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Saturation: <strong
+                                            id="saturation-val">50</strong></label>
+                                    <input type="range" class="form-range" id="saturation" min="0" max="100" value="50">
+                                </div>
+                                <button class="btn btn-primary w-100" onclick="applyImageSettings()">
+                                    <i class="bi bi-check-circle me-2"></i>Apply Settings
+                                </button>
+                            </div>
+                        </div>
 
-                <div class="step">
-                    <h3>6️⃣ Konfigurasi Kamera</h3>
-                    <p>Untuk menghubungkan kamera:</p>
-                    <ul class="tech-list">
-                        <li>Masukkan <strong>IP Address</strong> kamera (contoh: 192.168.1.100)</li>
-                        <li>Masukkan <strong>Port ONVIF</strong> (biasanya 80, 8000, atau 8080)</li>
-                        <li>Masukkan <strong>Username</strong> dan <strong>Password</strong> kamera</li>
-                        <li>Klik tombol <strong>"Hubungkan"</strong></li>
-                    </ul>
-                </div>
+                        <!-- Other sections similar structure... -->
+                    </div>
 
-                <div class="step">
-                    <h3>🔧 Troubleshooting</h3>
-                    <p><strong>Stream tidak muncul:</strong></p>
-                    <ul class="tech-list">
-                        <li>Pastikan FFmpeg sudah terinstall dengan benar</li>
-                        <li>Check firewall tidak memblokir port 3000</li>
-                        <li>Pastikan kamera support RTSP streaming</li>
-                    </ul>
-                    <p style="margin-top: 10px;"><strong>Tidak bisa connect:</strong></p>
-                    <ul class="tech-list">
-                        <li>Verifikasi IP address dan credentials benar</li>
-                        <li>Pastikan kamera dan komputer dalam network yang sama</li>
-                        <li>Test ping ke IP kamera</li>
-                    </ul>
+                    <!-- Right Column: Connection Settings -->
+                    <div class="col-lg-4">
+                        <div class="card shadow-sm sticky-top" style="top: 20px;">
+                            <div class="card-header bg-secondary text-white">
+                                <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Pengaturan Kamera</h5>
+                            </div>
+                            <div class="card-body">
+                                <form onsubmit="return false;">
+                                    <div class="mb-3">
+                                        <label class="form-label">IP Address</label>
+                                        <input type="text" class="form-control" id="cameraIp" value="192.168.1.9"
+                                            placeholder="192.168.1.100">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Port ONVIF</label>
+                                        <input type="number" class="form-control" id="onvifPort" value="835"
+                                            placeholder="80">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Username</label>
+                                        <input type="text" class="form-control" id="username" value="avarocam">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Password</label>
+                                        <input type="password" class="form-control" id="password">
+                                    </div>
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-primary" onclick="connectCamera()" id="btn-connect">
+                                            <i class="bi bi-plug me-2"></i>Hubungkan
+                                        </button>
+                                        <button class="btn btn-danger" onclick="disconnectCamera()" id="btn-disconnect"
+                                            disabled>
+                                            <i class="bi bi-x-circle me-2"></i>Putuskan
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Global variables
-        let cameraConnected = false;
-        let streamActive = false;
-        let currentSpeed = 0.5;
-        const API_BASE = 'http://localhost:3000/api';
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            switchTab('live-view');
-
-            // Speed slider event
-            document.getElementById('ptz-speed').addEventListener('input', (e) => {
-                currentSpeed = parseFloat(e.target.value);
-                document.getElementById('speed-value').textContent = currentSpeed.toFixed(1) + 'x';
-            });
-
-            // Check server health
-            checkServerHealth();
-        });
-
-        // Tab Switching
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-
-            const tabs = Array.from(document.querySelectorAll('.nav-tab'));
-            const tabNames = ['live-view', 'profiles', 'tech-stack', 'guide'];
-            const index = tabNames.indexOf(tabId);
-            if (index !== -1) tabs[index].classList.add('active');
-        }
-
-        // Toast Notification System
-        function showToast(type, title, message) {
-            const container = document.getElementById('notification-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-
-            const icons = {
-                success: '✅',
-                error: '❌',
-                warning: '⚠️',
-                info: 'ℹ️'
-            };
-
-            toast.innerHTML = `
-                <div class="toast-icon">${icons[type]}</div>
-                <div class="toast-content">
-                    <div class="toast-title">${title}</div>
-                    <div class="toast-message">${message}</div>
-                </div>
-            `;
-
-            container.appendChild(toast);
-
-            setTimeout(() => toast.classList.add('show'), 100);
-
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 500);
-            }, 5000);
-        }
-
-        // Check Server Health
-        async function checkServerHealth() {
-            try {
-                const response = await fetch(`${API_BASE}/health`);
-                const data = await response.json();
-                if (data.success) {
-                    console.log('✅ Server is running');
-                }
-            } catch (error) {
-                showToast('error', 'Server Error', 'Backend server tidak dapat diakses. Pastikan server sudah running!');
-                console.error('Server not reachable:', error);
-            }
-        }
-
-        // Connect Camera
-        async function connectCamera() {
-            const connectBtn = document.getElementById('btn-connect');
-            const connectingIndicator = document.getElementById('connecting-indicator');
-
-            connectBtn.disabled = true;
-            connectingIndicator.classList.add('visible');
-
-            const ip = document.getElementById('cameraIp').value.trim();
-            const port = document.getElementById('onvifPort').value.trim();
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-
-            if (!ip || !port || !username) {
-                showToast('warning', 'Input Tidak Lengkap', 'Mohon isi semua field yang diperlukan');
-                connectBtn.disabled = false;
-                connectingIndicator.classList.remove('visible');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/connect`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ip, port, username, password })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    cameraConnected = true;
-                    updateUIState(true);
-                    updateStatus(true, data.profiles);
-                    displayProfiles(data.profiles);
-
-                    showToast('success', 'Koneksi Berhasil!',
-                        `Terhubung ke ${data.info.manufacturer} ${data.info.model}`);
-
-                    // Load presets
-                    setTimeout(() => loadPresets(), 1000);
-                } else {
-                    showToast('error', 'Koneksi Gagal', data.error);
-                }
-            } catch (error) {
-                showToast('error', 'Error', 'Tidak dapat terhubung ke server: ' + error.message);
-            } finally {
-                connectBtn.disabled = false;
-                connectingIndicator.classList.remove('visible');
-            }
-        }
-
-        // Disconnect Camera
-        async function disconnectCamera() {
-            try {
-                await fetch(`${API_BASE}/disconnect`, { method: 'POST' });
-
-                cameraConnected = false;
-                streamActive = false;
-                updateUIState(false);
-                updateStatus(false);
-
-                // Reset video container
-                const videoContainer = document.querySelector('.video-container');
-                videoContainer.innerHTML = `
-                    <div class="connecting-overlay" id="connecting-indicator">
-                        <div class="loader"></div>
-                        <p>Menyambungkan...</p>
-                    </div>
-                    <div class="video-placeholder">
-                        <div class="icon">📹</div>
-                        <h3>Kamera Terputus</h3>
-                        <p>Hubungkan kembali untuk melanjutkan</p>
-                    </div>
-                `;
-
-                // Clear preset list
-                document.getElementById('preset-list').innerHTML = `
-                    <p style="text-align: center; color: #999; padding: 20px;">
-                        Tidak ada preset tersedia
-                    </p>
-                `;
-
-                showToast('info', 'Disconnected', 'Kamera berhasil diputus');
-            } catch (error) {
-                showToast('error', 'Error', 'Gagal memutus koneksi');
-            }
-        }
-
-        // Update UI State
-        function updateUIState(connected) {
-            // Connection buttons
-            document.getElementById('btn-connect').disabled = connected;
-            document.getElementById('btn-disconnect').disabled = !connected;
-
-            // Stream buttons
-            document.getElementById('btn-start-stream').disabled = !connected;
-            document.getElementById('btn-stop-stream').disabled = !connected || !streamActive;
-
-            // PTZ controls
-            const ptzButtons = ['ptz-upleft', 'ptz-up', 'ptz-upright', 'ptz-left', 'ptz-stop',
-                'ptz-right', 'ptz-downleft', 'ptz-down', 'ptz-downright',
-                'zoom-in', 'zoom-out'];
-            ptzButtons.forEach(id => {
-                const btn = document.getElementById(id);
-                if (btn) btn.disabled = !connected;
-            });
-
-            // Preset controls
-            document.getElementById('preset-name').disabled = !connected;
-            document.getElementById('btn-save-preset').disabled = !connected;
-            document.getElementById('btn-refresh-presets').disabled = !connected;
-
-            // Connection status
-            const statusEl = document.getElementById('connection-status');
-            if (connected) {
-                statusEl.innerHTML = '<span class="status-indicator status-online"></span><span>Terhubung</span>';
-            } else {
-                statusEl.innerHTML = '<span class="status-indicator status-offline"></span><span>Tidak Terhubung</span>';
-            }
-        }
-
-        // Display Profiles
-        function displayProfiles(profiles) {
-            const contentDiv = document.getElementById('profile-info-content');
-
-            if (!profiles || profiles.length === 0) {
-                contentDiv.innerHTML = '<p style="text-align: center; color: #999;">Tidak ada media profile yang ditemukan.</p>';
-                return;
-            }
-
-            let html = '<div style="display: grid; gap: 15px;">';
-
-            profiles.forEach((profile, index) => {
-                const videoConfig = profile.video?.encoder || {};
-                const audioConfig = profile.audio?.encoder || {};
-
-                html += `
-                    <div class="tech-item">
-                        <h3>📊 Profile ${index + 1}: ${profile.name || 'Unnamed'}</h3>
-                        <ul class="tech-list">
-                            <li><strong>Token:</strong> ${profile.token}</li>
-                            ${videoConfig.encoding ? `<li><strong>Video Encoding:</strong> ${videoConfig.encoding}</li>` : ''}
-                            ${videoConfig.resolution ? `<li><strong>Resolution:</strong> ${videoConfig.resolution.width}x${videoConfig.resolution.height}</li>` : ''}
-                            ${videoConfig.framerate ? `<li><strong>Frame Rate:</strong> ${videoConfig.framerate} fps</li>` : ''}
-                            ${videoConfig.bitrate ? `<li><strong>Bitrate:</strong> ${videoConfig.bitrate} kbps</li>` : ''}
-                            ${profile.ptz ? '<li><strong>PTZ:</strong> ✓ Supported</li>' : '<li><strong>PTZ:</strong> ✗ Not Supported</li>'}
-                            ${profile.stream?.rtsp ? `<li><strong>RTSP URL:</strong> <code style="font-size: 0.85em; color: #667eea;">${profile.stream.rtsp}</code></li>` : ''}
-                        </ul>
-                    </div>
-                `;
-            });
-
-            html += '</div>';
-            contentDiv.innerHTML = html;
-        }
-
-        // Load Stream
-        // Load Stream - IMPROVED VERSION
-        function loadStream() {
-            if (!cameraConnected) {
-                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                return;
-            }
-
-            const videoContainer = document.querySelector('.video-container');
-            const timestamp = new Date().getTime();
-            const streamUrl = `${API_BASE}/stream/mjpeg?t=${timestamp}`;
-
-            console.log('🎬 Loading stream from:', streamUrl);
-
-            // Show loading indicator
-            videoContainer.innerHTML = `
-        <div class="connecting-overlay visible" id="stream-connecting">
-            <div class="loader"></div>
-            <p>Memuat stream...</p>
-            <p style="font-size: 0.9em; margin-top: 10px; opacity: 0.7;">Mohon tunggu 5-10 detik</p>
-        </div>
-    `;
-
-            // Create img element
-            const img = document.createElement('img');
-            img.style.cssText = `
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        background: #000;
-        display: none;
-    `;
-            img.src = streamUrl;
-
-            // Track loading
-            let loadTimeout;
-            let isLoaded = false;
-
-            // On load success
-            img.onload = function () {
-                console.log('✅ Stream loaded successfully!');
-                isLoaded = true;
-                clearTimeout(loadTimeout);
-
-                // Remove loading overlay
-                const overlay = document.getElementById('stream-connecting');
-                if (overlay) {
-                    overlay.remove();
-                }
-
-                // Show image
-                img.style.display = 'block';
-
-                streamActive = true;
-                document.getElementById('btn-stop-stream').disabled = false;
-                document.getElementById('btn-start-stream').disabled = true;
-
-                showToast('success', 'Stream Active', 'Video streaming berhasil dimulai');
-            };
-
-            // On error
-            img.onerror = function (e) {
-                console.error('❌ Stream load error:', e);
-                clearTimeout(loadTimeout);
-                handleStreamError();
-            };
-
-            // Timeout after 15 seconds
-            loadTimeout = setTimeout(() => {
-                if (!isLoaded) {
-                    console.error('⏱️ Stream load timeout');
-                    handleStreamError();
-                }
-            }, 15000);
-
-            // Add image to container
-            videoContainer.appendChild(img);
-
-            // Mark as attempting to stream
-            streamActive = true;
-            document.getElementById('btn-stop-stream').disabled = false;
-        }
-
-        // Handle Stream Error - IMPROVED
-        function handleStreamError() {
-            streamActive = false;
-            const videoContainer = document.querySelector('.video-container');
-
-            videoContainer.innerHTML = `
-        <div class="video-placeholder" style="padding: 30px;">
-            <div class="icon">❌</div>
-            <h3>Gagal Memuat Stream</h3>
-            <p style="margin: 15px 0;">Kemungkinan penyebab:</p>
-            <ul style="text-align: left; max-width: 500px; margin: 0 auto; line-height: 1.8;">
-                <li><strong>FFmpeg belum terinstall</strong> - Jalankan: <code>ffmpeg -version</code></li>
-                <li><strong>RTSP URL tidak valid</strong> - Cek kredensial kamera</li>
-                <li><strong>Network timeout</strong> - Pastikan koneksi stabil</li>
-                <li><strong>Kamera tidak support RTSP</strong> - Test dengan VLC Player</li>
-                <li><strong>Port diblokir firewall</strong> - Buka port 554 (RTSP)</li>
-            </ul>
-            <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px; font-size: 0.9em;">
-                <strong>Debug:</strong> Buka console browser (F12) dan server terminal untuk melihat error detail
-            </div>
-        </div>
-    `;
-
-            document.getElementById('btn-stop-stream').disabled = true;
-            document.getElementById('btn-start-stream').disabled = false;
-
-            showToast('error', 'Stream Failed', 'Gagal memuat video. Periksa console untuk detail.');
-        }
-
-        // Handle Stream Load
-        function handleStreamLoad() {
-            const overlay = document.getElementById('stream-connecting');
-            if (overlay) overlay.classList.remove('visible');
-            updateStatus(true);
-            showToast('success', 'Stream Active', 'Video streaming berhasil dimulai');
-        }
-
-        // Handle Stream Error
-        function handleStreamError(img) {
-            streamActive = false;
-            img.parentElement.innerHTML = `
-                <div class="video-placeholder">
-                    <div class="icon">❌</div>
-                    <h3>Stream Error</h3>
-                    <p>Gagal memuat stream. Pastikan:</p>
-                    <ul style="text-align: left; margin-top: 15px; max-width: 400px;">
-                        <li>FFmpeg sudah terinstall</li>
-                        <li>Kamera support RTSP streaming</li>
-                        <li>Network connection stabil</li>
-                    </ul>
-                </div>
-            `;
-            showToast('error', 'Stream Failed', 'Gagal memuat video stream');
-        }
-
-        // Stop Stream
-        function stopStream() {
-            const videoContainer = document.querySelector('.video-container');
-            videoContainer.innerHTML = `
-                <div class="connecting-overlay" id="connecting-indicator">
-                    <div class="loader"></div>
-                    <p>Menyambungkan...</p>
-                </div>
-                <div class="video-placeholder">
-                    <div class="icon">⏹️</div>
-                    <h3>Stream Dihentikan</h3>
-                    <p>Klik "Mulai Stream" untuk melanjutkan</p>
-                </div>
-            `;
-
-            streamActive = false;
-            document.getElementById('btn-stop-stream').disabled = true;
-            updateStatus(true);
-
-            showToast('info', 'Stream Stopped', 'Video streaming dihentikan');
-        }
-
-        // Update Status
-        function updateStatus(online, profiles = []) {
-            const statusValue = document.getElementById('status-value');
-            const resolutionValue = document.getElementById('resolution-value');
-            const fpsValue = document.getElementById('fps-value');
-            const bitrateValue = document.getElementById('bitrate-value');
-
-            if (online && profiles.length > 0) {
-                statusValue.innerHTML = '<span class="status-indicator status-online"></span>Online';
-
-                const firstProfile = profiles[0];
-                if (firstProfile.video && firstProfile.video.encoder) {
-                    const encoder = firstProfile.video.encoder;
-                    resolutionValue.textContent = `${encoder.resolution.width}x${encoder.resolution.height}`;
-                    fpsValue.textContent = encoder.framerate + ' fps';
-                    bitrateValue.textContent = `${encoder.bitrate} kbps`;
-                }
-            } else if (online) {
-                statusValue.innerHTML = '<span class="status-indicator status-online"></span>Online';
-            } else {
-                statusValue.innerHTML = '<span class="status-indicator status-offline"></span>Offline';
-                resolutionValue.textContent = '-';
-                fpsValue.textContent = '-';
-                bitrateValue.textContent = '-';
-            }
-        }
-
-        // PTZ Move
-        async function ptzMove(direction) {
-            if (!cameraConnected) {
-                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/move`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ direction, speed: currentSpeed })
-                });
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    showToast('error', 'PTZ Error', data.error);
-                }
-            } catch (error) {
-                showToast('error', 'PTZ Error', 'Gagal mengirim perintah: ' + error.message);
-            }
-        }
-
-        // PTZ Stop
-        async function ptzStop() {
-            if (!cameraConnected) return;
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/stop`, {
-                    method: 'POST'
-                });
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    showToast('error', 'PTZ Error', data.error);
-                }
-            } catch (error) {
-                showToast('error', 'PTZ Error', 'Gagal menghentikan gerakan');
-            }
-        }
-
-        // PTZ Zoom
-        async function ptzZoom(direction) {
-            if (!cameraConnected) {
-                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/zoom`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ direction, speed: currentSpeed })
-                });
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    showToast('error', 'Zoom Error', data.error);
-                } else {
-                    showToast('info', 'Zoom', `Zooming ${direction}...`);
-                }
-            } catch (error) {
-                showToast('error', 'Zoom Error', 'Gagal zoom: ' + error.message);
-            }
-        }
-
-        // Load Presets
-        async function loadPresets() {
-            if (!cameraConnected) {
-                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/presets`);
-                const data = await response.json();
-
-                const presetList = document.getElementById('preset-list');
-
-                if (data.success && data.presets && data.presets.length > 0) {
-                    let html = '';
-
-                    data.presets.forEach(preset => {
-                        html += `
-                            <div class="preset-item">
-                                <div>
-                                    <div class="preset-name">${preset.name || 'Preset ' + preset.token}</div>
-                                    <div class="preset-token">Token: ${preset.token}</div>
-                                </div>
-                                <div class="preset-actions">
-                                    <button class="preset-btn goto" onclick="gotoPreset('${preset.token}')">
-                                        📍 Go
-                                    </button>
-                                    <button class="preset-btn delete" onclick="deletePreset('${preset.token}')">
-                                        🗑️
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    });
-
-                    presetList.innerHTML = html;
-                    showToast('success', 'Presets Loaded', `${data.presets.length} preset ditemukan`);
-                } else {
-                    presetList.innerHTML = `
-                        <p style="text-align: center; color: #999; padding: 20px;">
-                            Tidak ada preset tersimpan
-                        </p>
-                    `;
-                    showToast('info', 'No Presets', 'Belum ada preset yang tersimpan');
-                }
-            } catch (error) {
-                showToast('error', 'Error', 'Gagal memuat presets: ' + error.message);
-            }
-        }
-
-        // Save Preset
-        async function savePreset() {
-            if (!cameraConnected) {
-                showToast('warning', 'Tidak Terhubung', 'Hubungkan ke kamera terlebih dahulu!');
-                return;
-            }
-
-            const presetName = document.getElementById('preset-name').value.trim();
-
-            if (!presetName) {
-                showToast('warning', 'Input Kosong', 'Masukkan nama preset!');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/preset/set`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: presetName })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast('success', 'Preset Saved', `Preset "${presetName}" berhasil disimpan`);
-                    document.getElementById('preset-name').value = '';
-
-                    // Reload presets
-                    setTimeout(() => loadPresets(), 500);
-                } else {
-                    showToast('error', 'Save Failed', data.error);
-                }
-            } catch (error) {
-                showToast('error', 'Error', 'Gagal menyimpan preset: ' + error.message);
-            }
-        }
-
-        // Goto Preset
-        async function gotoPreset(token) {
-            if (!cameraConnected) return;
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/preset/goto`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ preset: token })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast('success', 'Moving to Preset', 'Kamera bergerak ke posisi preset');
-                } else {
-                    showToast('error', 'Error', data.error);
-                }
-            } catch (error) {
-                showToast('error', 'Error', 'Gagal pindah ke preset: ' + error.message);
-            }
-        }
-
-        // Delete Preset
-        async function deletePreset(token) {
-            if (!cameraConnected) return;
-
-            if (!confirm('Apakah Anda yakin ingin menghapus preset ini?')) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/ptz/preset/delete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ preset: token })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast('success', 'Preset Deleted', 'Preset berhasil dihapus');
-
-                    // Reload presets
-                    setTimeout(() => loadPresets(), 500);
-                } else {
-                    showToast('error', 'Delete Failed', data.error);
-                }
-            } catch (error) {
-                showToast('error', 'Error', 'Gagal menghapus preset: ' + error.message);
-            }
-        }
-
-        // Keyboard shortcuts for PTZ control
-        document.addEventListener('keydown', (e) => {
-            if (!cameraConnected) return;
-
-            // Only work when not typing in input fields
-            if (e.target.tagName === 'INPUT') return;
-
-            switch (e.key) {
-                case 'ArrowUp':
-                    e.preventDefault();
-                    ptzMove('up');
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    ptzMove('down');
-                    break;
-                case 'ArrowLeft':
-                    e.preventDefault();
-                    ptzMove('left');
-                    break;
-                case 'ArrowRight':
-                    e.preventDefault();
-                    ptzMove('right');
-                    break;
-                case ' ':
-                case 'Escape':
-                    e.preventDefault();
-                    ptzStop();
-                    break;
-                case '+':
-                case '=':
-                    e.preventDefault();
-                    ptzZoom('in');
-                    break;
-                case '-':
-                case '_':
-                    e.preventDefault();
-                    ptzZoom('out');
-                    break;
-            }
-        });
-
-        // Auto-stop PTZ on key release (for better control)
-        let moveTimeout;
-        const originalPtzMove = ptzMove;
-        ptzMove = function (direction) {
-            originalPtzMove(direction);
-
-            clearTimeout(moveTimeout);
-            moveTimeout = setTimeout(() => {
-                ptzStop();
-            }, 1000);
-        };
-    </script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
 </body>
 
 </html>

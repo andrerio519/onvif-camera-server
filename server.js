@@ -58,7 +58,7 @@ app.post('/api/connect', async (req, res) => {
         await Promise.race([
             cameraDevice.init(),
             new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Connection timeout (10s)')), 10000)
+                setTimeout(() => reject(new Error('Connection timeout (10s)')), 30000)
             )
         ]);
 
@@ -543,7 +543,7 @@ app.get('/api/stream/mjpeg', async (req, res) => {
         req.on('close', () => {
             console.log('\n🔌 Client disconnected from stream');
             streamClients.delete(res);
-            
+
             if (streamClients.size === 0 && ffmpegProcess) {
                 console.log('⏹️ No more clients, stopping stream');
                 ffmpegProcess.kill('SIGKILL');
@@ -579,6 +579,144 @@ app.use((err, req, res, next) => {
         success: false,
         error: 'Internal server error',
         message: err.message
+    });
+});
+
+// Endpoint Setting 
+app.post('/api/camera/image/settings', async (req, res) => {
+    try {
+        const { brightness, contrast, saturation, sharpness } = req.body;
+
+        await cameraDevice.services.imaging.setImagingSettings({
+            brightness: brightness,
+            contrast: contrast,
+            saturation: saturation,
+            sharpness: sharpness
+        });
+
+        res.json({ success: true, message: 'Image settings updated' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Backend endpoint
+app.post('/api/audio/control', async (req, res) => {
+    try {
+        const { action, volume } = req.body; // action: 'mute', 'unmute', 'volume'
+
+        if (action === 'volume') {
+            // Set volume menggunakan ONVIF audio encoder config
+            await cameraDevice.services.media.setAudioEncoderConfiguration({
+                token: cameraDevice.current_profile.audio.encoder.token,
+                configuration: {
+                    sessionTimeout: 'PT60S',
+                    volume: volume
+                }
+            });
+        }
+
+        res.json({ success: true, message: 'Audio updated' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Backend untuk event subscription
+const EventEmitter = require('events');
+const cameraEvents = new EventEmitter();
+
+app.post('/api/events/subscribe', async (req, res) => {
+    try {
+        // Subscribe to camera events
+        await cameraDevice.services.events.createPullPointSubscription();
+
+        // Poll events setiap 1 detik
+        setInterval(async () => {
+            try {
+                const messages = await cameraDevice.services.events.pullMessages({
+                    timeout: 'PT1S',
+                    messageLimit: 10
+                });
+
+                if (messages && messages.length > 0) {
+                    messages.forEach(msg => {
+                        // Emit event ke frontend via WebSocket
+                        cameraEvents.emit('motion', msg);
+                    });
+                }
+            } catch (e) {
+                console.log('No new events');
+            }
+        }, 1000);
+
+        res.json({ success: true, message: 'Subscribed to events' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// WebSocket connection untuk event real-time
+const ws = new WebSocket('ws://localhost:3000');
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'motion') {
+        showMotionAlert(data);
+    }
+};
+
+function showMotionAlert(data) {
+    const alertDiv = document.getElementById('motion-alerts');
+    const alert = document.createElement('div');
+    alert.className = 'motion-alert';
+    alert.innerHTML = `
+        <span>⚠️ Motion detected at ${new Date().toLocaleTimeString()}</span>
+    `;
+    alertDiv.prepend(alert);
+}
+
+// Backend recording dengan FFmpeg
+let recordingProcess = null;
+
+app.post('/api/recording/start', async (req, res) => {
+    try {
+        const { duration, filename } = req.body;
+        const streamUri = formatStreamUri(
+            cameraDevice.current_profile.stream.rtsp,
+            onvifUsername,
+            onvifPassword
+        );
+
+        const outputPath = `./recordings/${filename || Date.now()}.mp4`;
+
+        recordingProcess = spawn('ffmpeg', [
+            '-i', streamUri,
+            '-t', duration || '60', // default 60 detik
+            '-c', 'copy',
+            outputPath
+        ]);
+
+        recordingProcess.on('close', (code) => {
+            console.log('Recording finished:', outputPath);
+        });
+
+        res.json({
+            success: true,
+            message: 'Recording started',
+            outputPath: outputPath
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// WebSocket endpoint untuk real-time events
+const expressWs = require('express-ws')(app);
+app.ws('/events', (ws, req) => {
+    console.log('WebSocket client connected');
+
+    cameraEvents.on('motion', (data) => {
+        ws.send(JSON.stringify({ type: 'motion', data }));
     });
 });
 
